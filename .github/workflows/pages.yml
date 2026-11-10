@@ -1,0 +1,40 @@
+name: Publish preview
+on:
+  push: { branches: [main] }
+  workflow_dispatch:
+  schedule: [{ cron: '0 5 * * *' }]
+permissions: { contents: read, pages: write, id-token: write }
+concurrency: { group: pages, cancel-in-progress: true }
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: GovStackWorkingGroup/bb-file-management
+          ref: v0.4-conformance-profiles
+          path: specification
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: jeremi/govstack-specification-site
+          ref: 567eb981cd0c2a1bb9163b2cecbfc12a1b7412fd
+          path: renderer
+          persist-credentials: false
+      # Workaround: renderer resolves `contract:` as a local file; cross-BB URNs fail the check
+      - run: sed -i 's|^\(\s*contract:\) "govstack:spec:bb:[^"]*"|\1|' specification/requirements/*.md
+      - uses: ./renderer
+        with:
+          source: specification
+          output: ${{ runner.temp }}/site
+          base: /${{ github.event.repository.name }}/
+          unofficial: 'true'
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: '${{ runner.temp }}/site' }
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: { name: github-pages, url: '${{ steps.d.outputs.page_url }}' }
+    steps:
+      - id: d
+        uses: actions/deploy-pages@v4
