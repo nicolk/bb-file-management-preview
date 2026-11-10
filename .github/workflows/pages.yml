@@ -1,40 +1,77 @@
 name: Publish preview
+
 on:
-  push: { branches: [main] }
+  push:
+    branches: [main]
   workflow_dispatch:
-  schedule: [{ cron: '0 5 * * *' }]
-permissions: { contents: read, pages: write, id-token: write }
-concurrency: { group: pages, cancel-in-progress: true }
+  # Daily rebuild so new commits on the content branch are picked up.
+  schedule:
+    - cron: '17 5 * * *'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out specification content
+        uses: actions/checkout@v7
         with:
           repository: GovStackWorkingGroup/bb-file-management
           ref: v0.4-conformance-profiles
           path: specification
           persist-credentials: false
-      - uses: actions/checkout@v4
+
+      - name: Check out renderer (pinned)
+        uses: actions/checkout@v7
         with:
           repository: jeremi/govstack-specification-site
           ref: 567eb981cd0c2a1bb9163b2cecbfc12a1b7412fd
           path: renderer
           persist-credentials: false
-      # Workaround: renderer resolves `contract:` as a local file; cross-BB URNs fail the check
-      - run: sed -i 's|^\(\s*contract:\) "govstack:spec:bb:[^"]*"|\1|' specification/requirements/*.md
-      - uses: ./renderer
+
+      # WORKAROUND: the renderer treats functionality `contract:` values as
+      # local files to publish. Cross-Building-Block references such as
+      # `contract: "govstack:spec:bb:information-mediator"` are URNs, not
+      # files, so the build fails on them. Blank any `contract:` holding a
+      # govstack:spec:bb:* URN in the preview checkout only (the source repo
+      # is not modified). Remove this step once the renderer understands URNs.
+      - name: "Workaround: blank cross-BB URN contracts"
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -E -i "s/^([[:space:]]*contract:)[[:space:]]*[\"']?govstack:spec:bb:.*\$/\1/" \
+            specification/requirements/*.md
+          git -C specification diff --stat
+
+      - name: Build and verify site
+        uses: ./renderer
         with:
           source: specification
           output: ${{ runner.temp }}/site
-          base: /${{ github.event.repository.name }}/
+          profile: framework
+          base: /bb-file-management-preview/
           unofficial: 'true'
-      - uses: actions/upload-pages-artifact@v3
-        with: { path: '${{ runner.temp }}/site' }
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: ${{ runner.temp }}/site
+
   deploy:
     needs: build
     runs-on: ubuntu-latest
-    environment: { name: github-pages, url: '${{ steps.d.outputs.page_url }}' }
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - id: d
-        uses: actions/deploy-pages@v4
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
