@@ -6,7 +6,7 @@ It is not an official GovStack publication; the authoritative specifications liv
 at <https://specs.govstack.global/>.
 
 - Content: [GovStackWorkingGroup/bb-file-management](https://github.com/GovStackWorkingGroup/bb-file-management),
-  branch `v0.4-conformance-profiles`
+  branch `v0.5`
 - Renderer: [jeremi/govstack-specification-site](https://github.com/jeremi/govstack-specification-site),
   pinned to `567eb981cd0c2a1bb9163b2cecbfc12a1b7412fd`, profile `framework`
 - Preview: <https://nicolk.github.io/bb-file-management-preview/>
